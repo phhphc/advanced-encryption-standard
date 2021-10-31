@@ -1,10 +1,18 @@
 # this AES algorithm use for little endian
 
+def wordToByte(word):
+    return [word>>(8*i)&0xff for i in range(4)]
+
 def byteToWord(byte):
     sWord = 0
     for i in range(3,-1,-1): sWord = sWord<<8 ^ byte[i]
     return sWord
 
+def hexToWords(buffer):
+    n = len(buffer)
+    buffer = [int(buffer[i: i + 2],16) for i in range(0, n, 2)]
+    n //= 2
+    return [byteToWord(buffer[i:i+4]) for i in range(0, n, 4)]
 
 def SBox(val, invert = False):
     AES_S_Box =[
@@ -53,8 +61,7 @@ def keyExpand(key, round = 11):
         return word>>8 ^ (word&0xff)<<24
 
     def subWord(word):
-        byte = [word>>(8*i)&0xff for i in range(4)]
-        byte = [SBox(b) for b in byte]
+        byte = [SBox(b) for b in wordToByte(word)]
         return byteToWord(byte)
 
     def expand(key):
@@ -72,16 +79,5 @@ def keyExpand(key, round = 11):
         return [[words[i + j*n] for i in range(n)] for j in range(round)]
 
     return expand(key)
-
-
-
-
-def hexToWords(buffer):
-    n = len(buffer)
-    buffer = [int(buffer[i: i + 2],16) for i in range(0, n, 2)]
-    n //= 2
-    return [byteToWord(buffer[i:i+4]) for i in range(0, n, 4)]
-
-
 
 print(keyExpand(hexToWords('4920e299a520526164696f476174756e')))
