@@ -14,6 +14,9 @@ def hexToWords(buffer):
     n //= 2
     return [byteToWord(buffer[i:i+4]) for i in range(0, n, 4)]
 
+def xor(a, b):
+    return [ x^y for (x,y) in zip(a, b)]
+
 def SBox(val, invert = False):
     AES_S_Box =[
             0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -54,7 +57,7 @@ def SBox(val, invert = False):
     if invert: return AES_S_Box_Inv[val]
     else: return AES_S_Box[val]
 
-def keyExpand(key):
+def expandKey(key):
     Rcon = [ 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a ]
 
     def rotWord(word):
@@ -88,6 +91,57 @@ def keyExpand(key):
 
     return expand(key)
 
+def blockEncrypt(k, m):
+    def subBytes(m):
+        return [SBox(byte) for byte in m]
+    
+    def shiftRows(m):
+        shift = [0x0, 0x1, 0x2, 0x3, 0x5, 0x6, 0x7, 0x4, 0xA, 0xB, 0x8, 0x9, 0xF, 0xC, 0xD, 0xE]
+        return [m[i] for i in range(0x10)]
+
+    def mixColumns(m):
+        def mix_column(col):
+            a = [val for val in col]
+            b = [val<<1 if val&0x80 == 0 else val<<1^0x11B for val in col]
+            return [
+                b[0] ^ a[3] ^ a[2] ^ b[1] ^ a[1],
+                b[1] ^ a[0] ^ a[3] ^ b[2] ^ a[2],
+                b[2] ^ a[1] ^ a[0] ^ b[3] ^ a[3],
+                b[3] ^ a[2] ^ a[1] ^ b[0] ^ a[0],
+            ]
+        
+        r = [None]*16
+        for i in range(4):
+            [r[i], r[4+i], r[8+i], r[12+i]] = mix_column([m[j*4 + i] for j in range(4)])
+        return r
+    
+    n = len(k)
+    c = m
+    for i in range(n - 2):
+        c = mixColumns(shiftRows(subBytes(xor(c, k[i]))))
+    return xor(shiftRows(subBytes(xor(c, k[n-2]))), k[n -1])
+
+def parseMessage(m,padding = False):
+    if padding == True:
+        p = 16 - len(m)&0xF
+        m += chr(p)*p
+
+    return [[ord(c) for c in m[i:i+16]] for i in range(0, len(m), 16)]
+    
+
+def CBCmode(k, m , IV = [0 for i in range(16)]):
+    k = expandKey(hexToWords(k))
+    m = parseMessage(m, True)
+    print(m)
+    v = IV
+    c = []
+    for bm in m:
+        v = blockEncrypt(k, xor(bm, v))
+        c.append(v)
+    
+    for bm in c:
+        for b in bm:
+            print(hex(b),end=' ')
 
 
-print(keyExpand(hexToWords('00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f'.replace(' ', ''))))
+print(CBCmode('00'*16, 'hello world hello world hii'))
