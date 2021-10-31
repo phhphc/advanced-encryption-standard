@@ -54,7 +54,7 @@ def SBox(val, invert = False):
     if invert: return AES_S_Box_Inv[val]
     else: return AES_S_Box[val]
 
-def keyExpand(key, round = 11):
+def keyExpand(key):
     Rcon = [ 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a ]
 
     def rotWord(word):
@@ -66,8 +66,12 @@ def keyExpand(key, round = 11):
 
     def expand(key):
         n = len(key)
-        words = [None]*(n*round)
-        for i in range(n*round):
+        round = 11
+        if n == 6: round = 13
+        elif n == 8: round = 15
+
+        words = [None]*(4*round)
+        for i in range(4*round):
             if i < n: 
                 words[i] = key[i]
             elif i%n == 0: 
@@ -76,8 +80,8 @@ def keyExpand(key, round = 11):
                 words[i] = words[i-n]^subWord(words[i-1])
             else: 
                 words[i] = words[i-n]^words[i-1]
-        return [[words[i + j*n] for i in range(n)] for j in range(round)]
+        return [[words[i + j*4] for i in range(4)] for j in range(round)]
 
     return expand(key)
 
-print(keyExpand(hexToWords('4920e299a520526164696f476174756e')))
+print(keyExpand(hexToWords('00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f'.replace(' ', ''))))
