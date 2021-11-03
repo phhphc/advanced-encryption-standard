@@ -20,6 +20,17 @@ def hexToWords(buffer):
 def xor(a, b):
     return [ x^y for (x,y) in zip(a, b)]
 
+def increaseCounter(IV):
+    remain = 1
+    nextIV = []
+
+    for i in range(len(IV)-1,-1,-1):
+        remain = IV[i] + remain
+        nextIV.insert(0, remain&0xff)
+        remain >>= 8
+        
+    return nextIV
+
 SBox = (
         0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
         0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -119,6 +130,31 @@ def blockEncrypt(k, m):
 
     return xor(k[r], shiftRows(subBytes(c)))
 
+def blockDecrypt(k, c):
+    def invSubBytes(m):
+        return [SBox_Inv[byte] for byte in m]
+    
+    def invShiftRows(m):
+        shift = ( 0x0, 0xD, 0xA, 0x7, 0x4, 0x1, 0xE, 0xB, 0x8, 0x5, 0x2, 0xF, 0xC, 0x9, 0x6, 0x3 )
+        return [m[shift[i]] for i in range(0x10)]
+
+    def invMixColumns(m): # this code is not correct
+        def inv_mix_column(col):
+            a = [val for val in col]
+            b = [val<<1 if val&0x80 == 0 else val<<1^0x11B for val in col]
+            return [
+                b[0] ^ a[3] ^ a[2] ^ b[1] ^ a[1],
+                b[1] ^ a[0] ^ a[3] ^ b[2] ^ a[2],
+                b[2] ^ a[1] ^ a[0] ^ b[3] ^ a[3],
+                b[3] ^ a[2] ^ a[1] ^ b[0] ^ a[0],
+            ]
+        r = [None]*16
+        for i in range(4):
+            [r[4*i], r[4*i + 1], r[4*i+2], r[4*i+3]] = inv_mix_column([m[i*4 + j] for j in range(4)])
+        return r
+
+    # TODO: finish decryption
+
 def parseMessage(m,padding = False):
     if padding == True:
         p = 16 - (len(m)&0xF)
@@ -134,16 +170,26 @@ def CBCmode(k, m , IV):
     cb = []
     for bm in m:
         v = blockEncrypt(k, xor(bm, v))
-        cb.append(v)
+        cb += v
 
-    c = []
-    for b in cb:
-        c += b
-    return c
+    return cb
 
+def CTRmode(k, m, IV):
+    k = expandKey(hexToWords(k))
+    m = parseMessage(m)
+    v = IV
+    cb = []
+    for bm in m:
+        cb += xor(bm, blockEncrypt(k, v))
+        v = increaseCounter(v)
+        
+    return cb
+
+text = 'Like OFB, counter mode turns a block cipher into a stream cipher. It generates the next keystream block by encrypting successive values of a "counter". The counter can be any function which produces a sequence which is guaranteed not to repeat for a long time, although an actual increment-by-one counter is the simplest and most popular. The usage of a simple deterministic input function used to be controversial; critics argued that "deliberately exposing a cryptosystem to a known systematic input represents an unnecessary risk."[30] However, today CTR mode is widely accepted and any problems are considered a weakness of the underlying block cipher, which is expected to be secure regardless of systemic bias in its input.[31] Along with CBC, CTR mode is one of two block cipher modes recommended by Niels Ferguson and Bruce Schneier.[32]'
+    
 
 cipher = CBCmode('54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79 54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79'.replace(' ', ''), 
-            'Two One Nine Two HEllo World !',
+            text,
             hexToBytes('f7 72 b7 54 f1 4f b0 2a 8b 5e e1 f1 8c d9 ac d5'.replace(' ','')))
 
 print(" ".join([hex(byte) for byte in cipher]))
