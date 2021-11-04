@@ -11,12 +11,6 @@ def byteToWord(byte):
 def hexToBytes(buffer):
     return [int(buffer[i: i + 2],16) for i in range(0, len(buffer), 2)]
 
-def hexToWords(buffer):
-    n = len(buffer)
-    buffer = [int(buffer[i: i + 2],16) for i in range(0, n, 2)]
-    n //= 2
-    return [byteToWord(buffer[i:i+4]) for i in range(0, n, 4)]
-
 def xor(a, b):
     return [ x^y for (x,y) in zip(a, b)]
 
@@ -56,6 +50,9 @@ SBox_Inv = (
         0x60, 0x51, 0x7F, 0xA9, 0x19, 0xB5, 0x4A, 0x0D, 0x2D, 0xE5, 0x7A, 0x9F, 0x93, 0xC9, 0x9C, 0xEF,
         0xA0, 0xE0, 0x3B, 0x4D, 0xAE, 0x2A, 0xF5, 0xB0, 0xC8, 0xEB, 0xBB, 0x3C, 0x83, 0x53, 0x99, 0x61,
         0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D,
+)
+Rcon = ( 
+    0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a 
 )
 GF_Mul_2 = (
         0x00, 0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c, 0x0e, 0x10, 0x12, 0x14, 0x16, 0x18, 0x1a, 0x1c, 0x1e,
@@ -167,35 +164,35 @@ GF_Mul_14 = (
 )
 
 def expandKey(key):
-    Rcon = ( 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a )
-
-    def rotWord(word):
-        return word>>8 ^ (word&0xff)<<24
-
-    def subWord(word):
-        byte = [SBox[b] for b in wordToByte(word)]
-        return byteToWord(byte)
 
     n = len(key)
-    round = 11
-    if n == 6: round = 13
-    elif n == 8: round = 15
+    if n == 16: round = 11
+    elif n == 24: round = 13
+    elif n == 32: round = 15
+    else: raise ValueError("Key size must be 16, 24, or 32 bytes")
 
-    words = [None]*(4*round)
-    for i in range(4*round):
+    words = [None]*(16*round)
+    n //= 4 # merge 4 byte to one word
+    for i in range(4*round): 
+        offset = i*4
+
         if i < n: 
-            words[i] = key[i]
+            words[offset: offset + 4] = key[offset: offset + 4]
+
         elif i%n == 0: 
-            words[i] = words[i-n]^subWord(rotWord(words[i-1]))^Rcon[i//n]
+
+            words[offset]     = words[(i - n) * 4]     ^ SBox[words[(i - 1)*4 + 1]] ^ Rcon[i // n]
+            words[offset + 1] = words[(i - n) * 4 + 1] ^ SBox[words[(i - 1)*4 + 2]]
+            words[offset + 2] = words[(i - n) * 4 + 2] ^ SBox[words[(i - 1)*4 + 3]]
+            words[offset + 3] = words[(i - n) * 4 + 3] ^ SBox[words[(i - 1)*4]]
+
         elif n > 6 and i%n == 4: 
-            words[i] = words[i-n]^subWord(words[i-1])
+            words[offset: offset + 4] = [ w1^SBox[w2] for w1, w2 in zip(words[(i - n)<<2: (i - n + 1)<<2], words[(i - 1)<<2: offset])]
+
         else: 
-            words[i] = words[i-n]^words[i-1]
-    
-    byte = []
-    for w in words: 
-        byte += wordToByte(w)
-    return [ [byte[j*16 + i] for i in range(16)] for j in range(round)]
+            words[offset: offset + 4] = [ w1^w2 for w1, w2 in zip(words[(i - n)<<2: (i - n + 1)<<2], words[(i - 1)<<2: offset])]    
+
+    return [ [words[j*16 + i] for i in range(16)] for j in range(round)]
 
 
 def blockEncrypt(k, m):
@@ -259,7 +256,7 @@ def blockDecrypt(k, c):
 
 def encryptCBC(k, m , IV = [0x00]*16):
 
-    k = expandKey(hexToWords(k))
+    k = expandKey(k)
 
     padding = 16 - (len(m)&0xF)
     m += [padding]*padding
@@ -276,7 +273,7 @@ def encryptCBC(k, m , IV = [0x00]*16):
 
 def encryptCTR(k, m, IV = [0x00]*16):
     
-    k = expandKey(hexToWords(k))
+    k = expandKey(k)
     m = [m[i:i+16] for i in range(0, len(m), 16)]
     
     def increaseCounter(IV):
@@ -298,7 +295,7 @@ def encryptCTR(k, m, IV = [0x00]*16):
     return cb
 
 def decryptCBC(k, c, IV = [0x00]*16):
-    k = expandKey(hexToWords(k))
+    k = expandKey(k)
     c = [c[i:i+16] for i in range(0, len(c), 16)]
     v = IV
     m = []
@@ -312,12 +309,8 @@ def decryptCTR(k, c, IV = [0x00]*16):
 
 message = [0x4c, 0x69, 0x6b, 0x65, 0x20, 0x4f, 0x46, 0x42, 0x2c, 0x20, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72, 0x20]
 ci = hexToBytes('6b dd 86 5c 7c 94 24 ff b3 4d 93 9e d4 04 c1 8d 15 3c f5 aa 7e c6 ef 2e ba 15 7b 4a d3 80 e6 3e'.replace(' ',''))
-key = '54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79 54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79'.replace(' ', '')
+key = hexToBytes('54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79 54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79'.replace(' ', ''))
 IV = hexToBytes('f7 72 b7 54 f1 4f b0 2a 8b 5e e1 f1 8c d9 ac d5'.replace(' ',''))
-
-# ok, it done.
-# we need to remake key expansion
-# and make it to work with file
 
 cipher = encryptCBC(key, message, IV)
 message = decryptCBC(key, ci, IV)
