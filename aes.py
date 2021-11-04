@@ -151,6 +151,7 @@ GF_Mul_14 = (
 )
 
 def hexToBytes(buffer):
+    buffer = buffer.replace(" ", "")
     return [int(buffer[i: i + 2],16) for i in range(0, len(buffer), 2)]
 
 def xor(a, b):
@@ -248,31 +249,28 @@ def blockDecrypt(k, c):
     
 
 def encryptCBC(k, m , IV = [0x00]*16):
-
+    if len(IV) != 16: raise ValueError("IV must be 16 bytes")
     k = expandKey(k)
 
     padding = 16 - (len(m)&0xF)
-    m += [padding]*padding
+    m += bytes([padding]*padding)
     m = [m[i:i+16] for i in range(0, len(m), 16)]
 
-    print(m)
-    
     v = IV
     cb = []
     for bm in m:
         v = blockEncrypt(k, xor(bm, v))
         cb += v
-    return cb
+    return bytes(cb)
 
 def encryptCTR(k, m, IV = [0x00]*16):
-    
+    if len(IV) != 16: raise ValueError("IV must be 16 bytes")
     k = expandKey(k)
     m = [m[i:i+16] for i in range(0, len(m), 16)]
     
     def increaseCounter(IV):
 
-        remain = 1
-        nextIV = []
+        remain, nextIV = 1, []
         for i in range(len(IV)-1,-1,-1):
             remain = IV[i] + remain
             nextIV.insert(0, remain&0xff)
@@ -285,9 +283,10 @@ def encryptCTR(k, m, IV = [0x00]*16):
         cb += xor(bm, blockEncrypt(k, v))
         v = increaseCounter(v)
 
-    return cb
+    return bytes(cb)
 
 def decryptCBC(k, c, IV = [0x00]*16):
+    if len(IV) != 16: raise ValueError("IV must be 16 bytes")
     k = expandKey(k)
     c = [c[i:i+16] for i in range(0, len(c), 16)]
     v = IV
@@ -295,17 +294,7 @@ def decryptCBC(k, c, IV = [0x00]*16):
     for cb in c:
         m += xor(v, blockDecrypt(k, cb))
         v = cb
-    return m
+    return bytes(m[:-m[-1]])
 
 def decryptCTR(k, c, IV = [0x00]*16):
     return encryptCTR(k, c, IV)
-
-message = [0x4c, 0x69, 0x6b, 0x65, 0x20, 0x4f, 0x46, 0x42, 0x2c, 0x20, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72, 0x20]
-ci = hexToBytes('6b dd 86 5c 7c 94 24 ff b3 4d 93 9e d4 04 c1 8d 15 3c f5 aa 7e c6 ef 2e ba 15 7b 4a d3 80 e6 3e'.replace(' ',''))
-key = hexToBytes('54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79 54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79'.replace(' ', ''))
-IV = hexToBytes('f7 72 b7 54 f1 4f b0 2a 8b 5e e1 f1 8c d9 ac d5'.replace(' ',''))
-
-cipher = encryptCBC(key, message, IV)
-message = decryptCBC(key, ci, IV)
-print(" ".join([hex(byte) for byte in cipher]))
-print([chr(c) for c in message])
