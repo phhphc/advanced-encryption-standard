@@ -20,16 +20,6 @@ def hexToWords(buffer):
 def xor(a, b):
     return [ x^y for (x,y) in zip(a, b)]
 
-def increaseCounter(IV):
-    remain = 1
-    nextIV = []
-
-    for i in range(len(IV)-1,-1,-1):
-        remain = IV[i] + remain
-        nextIV.insert(0, remain&0xff)
-        remain >>= 8
-        
-    return nextIV
 
 SBox = (
         0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -265,18 +255,18 @@ def blockDecrypt(k, c):
         c = invSubBytes(invShiftRows(invMixColumns(xor(c, k[i]))))
 
     return xor(c, k[0])
-
-def parseMessage(m,padding = False):
-    if padding == True:
-        p = 16 - (len(m)&0xF)
-        m += chr(p)*p
-
-    return [[ord(c) for c in m[i:i+16]] for i in range(0, len(m), 16)]
     
 
 def encryptCBC(k, m , IV = [0x00]*16):
+
     k = expandKey(hexToWords(k))
-    m = parseMessage(m, True)
+
+    padding = 16 - (len(m)&0xF)
+    m += [padding]*padding
+    m = [m[i:i+16] for i in range(0, len(m), 16)]
+
+    print(m)
+    
     v = IV
     cb = []
     for bm in m:
@@ -285,14 +275,26 @@ def encryptCBC(k, m , IV = [0x00]*16):
     return cb
 
 def encryptCTR(k, m, IV = [0x00]*16):
+    
     k = expandKey(hexToWords(k))
-    m = parseMessage(m)
+    m = [m[i:i+16] for i in range(0, len(m), 16)]
+    
+    def increaseCounter(IV):
+
+        remain = 1
+        nextIV = []
+        for i in range(len(IV)-1,-1,-1):
+            remain = IV[i] + remain
+            nextIV.insert(0, remain&0xff)
+            remain >>= 8
+        return nextIV
+
     v = IV
     cb = []
     for bm in m:
         cb += xor(bm, blockEncrypt(k, v))
-        print(v)
         v = increaseCounter(v)
+
     return cb
 
 def decryptCBC(k, c, IV = [0x00]*16):
@@ -306,21 +308,18 @@ def decryptCBC(k, c, IV = [0x00]*16):
     return m
 
 def decryptCTR(k, c, IV = [0x00]*16):
-    k = expandKey(hexToWords(k))
-    c = [c[i:i+16] for i in range(0, len(c), 16)]
-    v = IV
-    m = []
-    for cb in c:
-        m += xor(cb, blockEncrypt(k, v))
-        v = increaseCounter(v)
-    return m
+    return encryptCTR(k, c, IV)
 
-message = 'Like OFB, counter ]'
-ci = hexToBytes('4a 82 19 1c 38 e9 f2 e0 63 39 2f bc fb 73 49 04 ce 58 cf'.replace(' ',''))
+message = [0x4c, 0x69, 0x6b, 0x65, 0x20, 0x4f, 0x46, 0x42, 0x2c, 0x20, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72, 0x20]
+ci = hexToBytes('6b dd 86 5c 7c 94 24 ff b3 4d 93 9e d4 04 c1 8d 15 3c f5 aa 7e c6 ef 2e ba 15 7b 4a d3 80 e6 3e'.replace(' ',''))
 key = '54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79 54 68 61 74 73 20 6D 75 54 68 61 74 73 20 6D 79'.replace(' ', '')
 IV = hexToBytes('f7 72 b7 54 f1 4f b0 2a 8b 5e e1 f1 8c d9 ac d5'.replace(' ',''))
 
-cipher = encryptCTR(key, message, IV)
-message = decryptCTR(key, ci, IV)
+# ok, it done.
+# we need to remake key expansion
+# and make it to work with file
+
+cipher = encryptCBC(key, message, IV)
+message = decryptCBC(key, ci, IV)
 print(" ".join([hex(byte) for byte in cipher]))
 print([chr(c) for c in message])
