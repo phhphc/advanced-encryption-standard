@@ -1,7 +1,7 @@
 import aes
 
 key = aes.hexToBytes('140b41b22a29beb4061bda66b6747e14')
-IV = aes.hexToBytes('4ca00ff4c898d61e1edbf1800618fb28')
+IV = aes.hexToBytes('4ca00ff4c898d61e1adbf1800618fb28')
 
 if __name__ == '__main__':
 
@@ -9,8 +9,8 @@ if __name__ == '__main__':
     print("Input buffer from file \"input.txt\"")
     print("Output buffer to file \"output.txt\"")
 
-    mode = input("Encrypt or Decrypt? (e/d): ")
-    operation = input('CBC or CRT? (c/r): ')
+    mode = 'd'#input("Encrypt or Decrypt? (e/d): ")
+    operation = 'c'#input('CBC or CRT? (c/r): ')
 
     input = open('input.txt', 'rb')
     buffer = input.read()
@@ -35,3 +35,5 @@ if __name__ == '__main__':
     output = open('output.txt', 'wb')
     output.write(buffer)
     output.close()
+
+    print(bytes(IV).hex(), buffer.hex())
